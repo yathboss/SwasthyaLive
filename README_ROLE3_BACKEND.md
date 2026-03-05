@@ -1,137 +1,174 @@
-# PHC Pulse — Role 3 Backend & Intelligence Bundle (Round-1 MVP)
+# PHC Pulse (aka PHC Live / JanSwasthya Live)
 
-This folder contains **ONLY Role-3** deliverables for Graph-E-Thon 3.0:
-- Firestore data model (operational signals only; **no patient records / PHI**)
-- Readiness Score (0–100) + Predicted Wait Time logic
-- Demo-stable seed initializer for `PHC_001`
-- Minimal API endpoints (Express server) + optional **Next.js App Router API templates**
-- Basic STAFF vs PUBLIC separation (server-side verification + suggested Firestore rules)
+A lightweight **real-time PHC operations + health‑literacy** system that reduces uncertainty for citizens and workload for staff by publishing live PHC status (TV board + public web link) and enabling Tele‑OPD suggestions.
 
-> Integration note: This bundle is designed to be **dropped into any repo**. If your main repo is Next.js, copy the files under `templates/next-app-router/...` into your repo root. If your main repo is not using Next API routes, use the included Express API server.
+> **Not a Hospital Management System (HMS).**  
+> PHC Pulse does **not** store full patient records, billing, or complex hospital workflows. It stores **operational signals only** (doctor status, queue, essential medicines, service alerts) and provides **guidance, not diagnosis**.
 
 ---
 
-## Data Model (Firestore)
+## What problem are we solving?
 
-### `phc_status/{phcId}` (Doc)
-Operational visibility only:
-- `doctorStatus`: `"Available" | "Busy" | "Break" | "OffDuty"`
-- `queueCount`: number
-- `nowServing`: string (token like `"T-07"`)
-- `avgConsultMins`: number (e.g., 6)
-- `alerts`: array of `{ message: string, severity: "info"|"warning"|"critical", until?: string }`
-- `medicines`: map of `{ [itemName: string]: "Available" | "Low" | "Out" }` (top essentials only)
-- `readinessScore`: number (0–100)
-- `predictedWaitMins`: number | null
-- `updatedAt`: timestamp
+In many Primary Health Centers (PHCs), the biggest pain isn’t only treatment — it’s **uncertainty**. Citizens often don’t know:
 
-### `teleopd_bookings/{id}` (Doc)
-Minimal fields (no PII):
-- `phcId`: string
-- `category`: `"General" | "Fever" | "Maternal" | "Child" | "Other"`
-- `slot`: ISO string
-- `status`: `"requested" | "confirmed" | "done" | "cancelled"`
-- `createdAt`: timestamp
+- which doctor is available right now  
+- how long the wait is / which token is serving  
+- whether essential medicines are available  
+- whether any service is temporarily down (lab closed, emergency priority, etc.)
 
-### `staff_learning/{phcId}/completions/{roleOrUser}` (Doc)
-- `roleOrUser`: string (e.g., `nurse`, `pharmacist`, `staff_uid_123`)
-- `items`: array of `{ sopId: string, completedAt: timestamp }`
+This causes overcrowding, repeated questions to staff, wasted trips, delayed care, and reduced trust.
 
 ---
 
-## Readiness Formula (simple & explainable)
+## Our solution (MVP)
 
-Weights:
-- **40%** queue pressure
-- **30%** staff availability
-- **20%** medicines
-- **10%** alerts
+PHC staff update a **minimal dashboard** and the same live status is instantly published:
 
-Queue pressure score:
-- `queueScore = clamp(100 - (queueCount / QUEUE_MAX)*100)`
-- default `QUEUE_MAX = 30`
+1) **TV Status Board (inside PHC)** — big, readable, auto-updating  
+2) **Citizen Web Link** — check before traveling (QR from TV board)
 
-Staff availability score:
-- Available=100, Busy=60, Break=40, OffDuty=0
+From minimal updates, the system computes:
 
-Medicines score:
-- Available=100, Low=50, Out=0 (average across listed items)
+- **Predicted wait time** (queue × avg consult time)  
+- **PHC Readiness Score (0–100)** combining staff availability, stock status, queue pressure, and service alerts
 
-Alerts score:
-- no alerts => 100
-- info reduces a little, warning reduces more, critical reduces most
+When readiness is low or wait is high, the system recommends:
 
-Final:
-`readinessScore = round(0.4*queue + 0.3*staff + 0.2*meds + 0.1*alerts)`
-
-### Predicted Wait Time
-`predictedWaitMins = clamp(queueCount * avgConsultMins, 0, 180)`
-- if `doctorStatus === OffDuty`, returns `null`
+- **Book Tele‑OPD slot**, or  
+- **Redirect to nearest available center** *(multi‑PHC demo mode / simulated)*
 
 ---
 
-## Demo Seed (one-click)
+## MVP Screens (Round‑1)
 
-Seeds `PHC_001` with realistic operational values and computed fields.
+1. **Staff Dashboard** (doctor / queue / alerts / essential medicines)
+2. **Public Status Board (TV Mode)**
+3. **Citizen Web Page** (same status + QR)
+4. **PHC Guide Bot** (preset buttons; demo-safe)
+5. **Tele‑OPD Booking**
+6. **Staff Learning tab** (SOP cards + completion tracking)
 
-Options:
-1) Express API endpoint: `POST /api/role3/seed`
-2) Script: `npm run seed`
+### PHC Guide Bot (preset buttons)
+- Check doctor availability  
+- Show wait time  
+- Medicines available?  
+- Book Tele‑OPD  
+- Stress check‑in *(supportive guidance + routing; not diagnosis)*
 
 ---
 
-## Auth / Roles
+## Privacy & Safety
 
-**PUBLIC:** read-only (no auth required for public read endpoints).  
-**STAFF:** write requires a Firebase ID token with `role="staff"` (recommended).  
-Fallback (demo): allowlist emails via `STAFF_EMAILS` env.
+- **No patient records / PHI.** Only operational signals are stored.
+- The bot provides **guidance, not diagnosis** (no prescriptions).
+- Demo mode may use seeded/mock data; real integrations are optional later.
 
 ---
 
-## Quick Start (Role-3 module testing)
+## Tech Stack (edit to match your repo)
 
-### 1) Install
+- Frontend: `Next.js` / `React` (TypeScript recommended)
+- Backend/Data: `Firebase (Firestore + Auth + Functions)` *(or equivalent)*
+- Deployment: `Vercel` / `Netlify` / `Firebase Hosting`
+
+> If your project uses a different stack, update this section.
+
+---
+
+## Quick Start (local)
+
 ```bash
-cd role3
-npm i
-```
-
-### 2) Env
-Copy:
-```bash
-cp .env.example .env
-```
-
-Provide:
-- `FIREBASE_PROJECT_ID`
-- `FIREBASE_SERVICE_ACCOUNT` (stringified JSON of service account OR use ADC)
-- optional `STAFF_EMAILS` (comma-separated)
-
-### 3) Run Express API
-```bash
+npm install
 npm run dev
-# server on http://localhost:8787
 ```
 
-### 4) Seed
+Open: `http://localhost:3000`
+
+---
+
+## Environment Variables
+
+Create `.env.local` from your `.env.example`:
+
 ```bash
-npm run seed
-# or POST http://localhost:8787/api/role3/seed
+cp .env.example .env.local
 ```
 
+Example keys (Firebase):
+
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
+
+> Never commit secrets. Commit `.env.example` only.
+
 ---
 
-## Firestore Security Rules (suggestion)
+## Data Model (high level)
 
-See: `firestore.rules`
+Recommended collections (Firestore-style):
+
+- `phc_status/{phcId}`
+  - `doctorStatus` (Available/Busy/Break/Off-duty)
+  - `queueCount`, `nowServing`, `avgConsultMins`
+  - `alerts[]`
+  - `medicines{ itemName: Available|Low|Out }`
+  - `readinessScore`, `predictedWaitMins`, `updatedAt`
+
+- `teleopd_bookings/{id}`
+  - `phcId`, `category`, `slot`, `status`, `createdAt`
+
+- `staff_learning/{phcId}/completions/{roleOrUser}`
+  - `sopId`, `completedAt`
 
 ---
 
-## Next.js App Router API templates
+## Readiness Score (explainable)
 
-If your main repo is Next.js (app router), copy the folder:
-`templates/next-app-router/app/api/role3/*`
-into your repo root under `app/api/role3/*`.
+A simple, judge-friendly formula:
 
-They call the same shared services under `src/*`.
+- **40% Queue pressure**
+- **30% Staff availability**
+- **20% Essential medicines**
+- **10% Service alerts**
 
+Predicted wait time:
+
+- `predictedWaitMins = queueCount * avgConsultMins` *(with clamps if needed)*
+
+---
+
+## Demo Flow (2–3 minutes)
+
+1) Open **Staff Dashboard** → update queue / doctor / medicine status  
+2) Show **TV Status Board** instantly updating (readiness + wait time)  
+3) Open **Citizen Page** via QR → show same live status  
+4) Use **Guide Bot button** “Show wait time” → bot responds from live data  
+5) Trigger **Tele‑OPD Booking** from recommendation → confirm booking ID  
+6) Show **Staff Learning** SOP completion ticks
+
+---
+
+## Team Roles (suggested)
+
+- Role 1: Product + Integration + Submission owner  
+- Role 2: Frontend UI (Staff Dashboard + TV Board)  
+- Role 3: Backend & Intelligence (DB + readiness + wait time + seed)  
+- Role 4: Citizen Experience (Citizen page + bot + tele‑OPD + learning)
+
+---
+
+## Repository Links
+
+- Deployed Prototype: *(add link)*
+- Explanation Video: *(add link)*
+- PPT Deck: *(add link)*
+
+---
+
+## License
+
+MIT (recommended for hackathon projects).
