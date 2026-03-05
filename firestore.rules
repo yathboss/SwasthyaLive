@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isStaff() {
+      return request.auth != null && (request.auth.token.role == 'staff' || request.auth.token.staff == true);
+    }
+
+    // Public read-only visibility layer
+    match /phc_status/{phcId} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    // Tele-OPD bookings: allow public create (no PII), staff can read
+    match /teleopd_bookings/{id} {
+      allow create: if true;
+      allow read: if isStaff();
+      allow update, delete: if false;
+    }
+
+    // Staff learning completions: staff write, authenticated read
+    match /staff_learning/{phcId}/completions/{roleOrUser} {
+      allow read: if request.auth != null;
+      allow write: if isStaff();
+    }
+  }
+}
